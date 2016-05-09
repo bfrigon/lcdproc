@@ -328,7 +328,7 @@ screen_set_func(Client *c, int argc, char **argv)
 						if (strcmp("toggle", argv[i]) == 0) {
 							if (s->backlight == BACKLIGHT_ON)
 								s->backlight = BACKLIGHT_OFF;
-							else if (s-backlight == BACKLIGHT_OFF)
+							else if (s->backlight == BACKLIGHT_OFF)
 								s->backlight = BACKLIGHT_ON;
 						}
 
@@ -347,6 +347,44 @@ screen_set_func(Client *c, int argc, char **argv)
 			}
 			else {
 				sock_send_error(c->sock, "-backlight requires a parameter\n");
+			}
+		}
+		/* Handle the "keypad_backlight" paramter */
+		else if (strcmp(p, "keypad_backlight") == 0) {
+			if (argc > i + 1) {
+				i++;
+				debug(RPT_DEBUG, "screen_set: keypad_backlight=\"%s\"", argv[i]);
+				/* set the keypad backlight status based on what the client has set*/
+				switch(c->keypad_backlight) {
+					case BACKLIGHT_OPEN:
+						if (strcmp("on", argv[i]) == 0)
+							s->keypad_backlight = BACKLIGHT_ON;
+
+						if (strcmp("off", argv[i]) == 0)
+							s->keypad_backlight = BACKLIGHT_OFF;
+
+						if (strcmp("toggle", argv[i]) == 0) {
+							if (s->keypad_backlight == BACKLIGHT_ON)
+								s->keypad_backlight = BACKLIGHT_OFF;
+							else if (s->keypad_backlight == BACKLIGHT_OFF)
+								s->keypad_backlight = BACKLIGHT_ON;
+						}
+
+						if (strcmp("blink", argv[i]) == 0)
+							s->keypad_backlight |= BACKLIGHT_BLINK;
+
+						if (strcmp("flash", argv[i]) == 0)
+							s->keypad_backlight |= BACKLIGHT_FLASH;
+					break;
+					default:
+						/*If the keypad backlight is not OPEN then inherit its state*/
+						s->keypad_backlight = c->keypad_backlight;
+					break;
+				}
+				sock_send_string(c->sock, "success\n");
+			}
+			else {
+				sock_send_error(c->sock, "-keypad_backlight requires a parameter\n");
 			}
 		}
 		/* Handle the "cursor" parameter */

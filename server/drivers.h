@@ -74,6 +74,12 @@ void
 drivers_backlight(int brightness);
 
 void
+drivers_keypad_backlight(int brightness);
+
+void
+drivers_set_backlight_color(long color);
+
+void
 drivers_output(int state);
 
 const char *

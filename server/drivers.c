@@ -431,6 +431,42 @@ drivers_backlight(int state)
 
 
 /**
+ * Set keypad backlight on all drivers.
+ * Call keypad_backlight() function of all drivers that have a keypad_backlight() function defined.
+ * \param state    New keypad backlight status.
+ */
+void
+drivers_keypad_backlight(int state)
+{
+	Driver *drv;
+
+	debug(RPT_DEBUG, "%s(state=%d)", __FUNCTION__, state);
+
+	ForAllDrivers(drv) {
+		if (drv->keypad_backlight)
+			drv->keypad_backlight(drv, state);
+	}
+}
+
+/**
+ * Set backlight color on all drivers.
+ * Call set_backlight_color() function of all drivers that have a set_backlight_color() function defined.
+ * \param color     Backlight color. (0xRRGGBB).
+ */
+void
+drivers_set_backlight_color(long color)
+{
+	Driver *drv;
+	
+	debug(RPT_DEBUG, "%s(RGB=%06X)", __FUNCTION__, color);
+
+	ForAllDrivers(drv) {
+		if (drv->set_backlight_color)
+			drv->set_backlight_color(drv, color);
+	}
+}
+
+/**
  * Set output on all drivers.
  * Call ouptput() function of all drivers that have an ouptput() function defined.
  * \param state    New ouptut status.

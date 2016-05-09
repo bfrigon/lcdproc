@@ -73,9 +73,12 @@ void menuscreen_create_testmenu(void);
 Menu *menuscreen_get_main(void);
 MenuEventFunc(heartbeat_handler);
 MenuEventFunc(backlight_handler);
+MenuEventFunc(keypad_backlight_handler);
 MenuEventFunc(titlespeed_handler);
 MenuEventFunc(contrast_handler);
 MenuEventFunc(brightness_handler);
+MenuEventFunc(keypad_brightness_handler);
+MenuEventFunc(backlight_color_handler);
 
 int
 menuscreens_init(void)
@@ -484,6 +487,7 @@ menuscreen_create_menu(void)
 {
 	Menu *options_menu;
 	Menu *driver_menu;
+	Menu *backlight_color_menu;
 	MenuItem *checkbox;
 	MenuItem *slider;
 	Driver *driver;
@@ -526,8 +530,25 @@ menuscreen_create_menu(void)
 	checkbox = menuitem_create_checkbox("heartbeat", heartbeat_handler, "Heartbeat", NULL, true, heartbeat);
 	menu_add_item(options_menu, checkbox);
 
-	checkbox = menuitem_create_checkbox("backlight", backlight_handler, "Backlight", NULL, true, backlight);
-	menu_add_item(options_menu, checkbox);
+	int backlight_avail = 0;
+	int keypad_backlight_avail = 0;
+	for (driver = drivers_getfirst(); driver; driver = drivers_getnext()) {
+		if (driver->backlight)
+			backlight_avail = 1;
+
+		if (driver->keypad_backlight)
+			keypad_backlight_avail = 1;
+	}
+
+	if (backlight_avail) {
+		checkbox = menuitem_create_checkbox("backlight", backlight_handler, "Backlight", NULL, true, backlight);
+		menu_add_item(options_menu, checkbox);
+	}
+
+	if (keypad_backlight_avail) {
+		checkbox = menuitem_create_checkbox("keypad_backlight", keypad_backlight_handler, "Kpd. Backlight", NULL, true, keypad_backlight);
+		menu_add_item(options_menu, checkbox);
+	}
 
 	slider = menuitem_create_slider("titlespeed", titlespeed_handler,
 					"TitleSpeed", NULL, "0", "10", TITLESPEED_NO, TITLESPEED_MAX, 1, titlespeed);
@@ -540,8 +561,11 @@ menuscreen_create_menu(void)
 	for (driver = drivers_getfirst(); driver; driver = drivers_getnext()) {
 		int contrast_avail = (driver->get_contrast && driver->set_contrast) ? 1 : 0;
 		int brightness_avail = (driver->get_brightness && driver->set_brightness) ? 1 : 0;
+		int keypad_brightness_avail = (driver->get_keypad_brightness && driver->set_keypad_brightness) ? 1 : 0;
+		int backlight_color_avail = (driver->set_backlight_color) ? 1 : 0;
 
-		if (contrast_avail || brightness_avail) {
+
+		if (contrast_avail || brightness_avail || keypad_brightness_avail || backlight_color_avail) {
 			/* menu's client is NULL since we're in the server */
 			driver_menu = menu_create(driver->name, NULL, driver->name, NULL);
 			if (driver_menu == NULL) {
@@ -570,6 +594,43 @@ menuscreen_create_menu(void)
 				slider = menuitem_create_slider("offbrightness", brightness_handler, "Off Brightness",
 								NULL, "min", "max", 0, 1000, 25, offbrightness);
 				menu_add_item(driver_menu, slider);
+			}
+			if (keypad_brightness_avail) {
+				int keypad_onbrightness = driver->get_keypad_brightness(driver, BACKLIGHT_ON);
+				int keypad_offbrightness = driver->get_keypad_brightness(driver, BACKLIGHT_OFF);
+
+				slider = menuitem_create_slider("keypad_onbrightness", keypad_brightness_handler, "KPD On Bright",
+								NULL, "min", "max", 0, 1000, 25, keypad_onbrightness);
+				menu_add_item(driver_menu, slider);
+
+				slider = menuitem_create_slider("keypad offbrightness", keypad_brightness_handler, "KPD Off Bright",
+								NULL, "min", "max", 0, 1000, 25, keypad_offbrightness);
+				menu_add_item(driver_menu, slider);
+			}
+
+			if (backlight_color_avail) {
+				backlight_color_menu = menu_create(driver->name, NULL, "Backlight color", NULL);
+				menu_set_association(backlight_color_menu, driver);
+				menu_add_item(driver_menu, backlight_color_menu);
+
+				long int color;
+				int color_r, color_g, color_b;
+				color = driver->get_backlight_color(driver);
+				color_r = (color & 0xFF0000) >> 16;
+				color_g = (color & 0x00FF00) >> 8;
+				color_b = (color & 0x0000FF);
+
+				slider = menuitem_create_slider("backlight_color_red", backlight_color_handler, "Red",
+								NULL, "min", "max", 0, 255, 5, color_r);
+				menu_add_item(backlight_color_menu, slider);
+
+				slider = menuitem_create_slider("backlight_color_green", backlight_color_handler, "Green",
+								NULL, "min", "max", 0, 255, 5, color_g);
+				menu_add_item(backlight_color_menu, slider);
+
+				slider = menuitem_create_slider("backlight_color_blue", backlight_color_handler, "Blue",
+								NULL, "min", "max", 0, 255, 5, color_b);
+				menu_add_item(backlight_color_menu, slider);
 			}
 		}
 	}
@@ -675,6 +736,22 @@ MenuEventFunc(backlight_handler)
 	return 0;
 }
 
+MenuEventFunc(keypad_backlight_handler)
+{
+	debug(RPT_DEBUG, "%s(item=[%s], event=%d)", __FUNCTION__,
+	      ((item != NULL) ? item->id : "(null)"), event);
+
+	if ((item != NULL) && (event == MENUEVENT_UPDATE)) {
+		/* Set keypad backlight setting */
+		keypad_backlight = item->data.checkbox.value;
+		report(RPT_INFO, "Menu: set backlight to %d", keypad_backlight);
+	}
+	return 0;
+}
+
+
+
+
 MenuEventFunc(titlespeed_handler)
 {
 	debug(RPT_DEBUG, "%s(item=[%s], event=%d)", __FUNCTION__,
@@ -729,6 +806,63 @@ MenuEventFunc(brightness_handler)
 			}
 			else if (strcmp(item->id, "offbrightness") == 0) {
 				driver->set_brightness(driver, BACKLIGHT_OFF, item->data.slider.value);
+			}
+		}
+	}
+	return 0;
+}
+
+MenuEventFunc(keypad_brightness_handler)
+{
+	debug(RPT_DEBUG, "%s(item=[%s], event=%d)", __FUNCTION__,
+	      ((item != NULL) ? item->id : "(null)"), event);
+
+	if ((item != NULL) && ((event == MENUEVENT_MINUS) || (event == MENUEVENT_PLUS))) {
+		/* Determine the driver by following the menu's association */
+		Driver *driver = item->parent->data.menu.association;
+
+		if (driver != NULL) {
+			if (strcmp(item->id, "keypad_onbrightness") == 0) {
+				driver->set_keypad_brightness(driver, BACKLIGHT_ON, item->data.slider.value);
+			}
+			else if (strcmp(item->id, "keypad_offbrightness") == 0) {
+				driver->set_keypad_brightness(driver, BACKLIGHT_OFF, item->data.slider.value);
+			}
+		}
+	}
+	return 0;
+}
+
+MenuEventFunc(backlight_color_handler)
+{
+	debug(RPT_DEBUG, "%s(item=[%s], event=%d)", __FUNCTION__,
+		((item != NULL) ? item->id : "(null)"), event);
+
+	if ((item != NULL) && ((event == MENUEVENT_MINUS) || (event == MENUEVENT_PLUS))) {
+		/* Determine the driver by following the menu's association */
+		Driver *driver = item->parent->data.menu.association;
+
+		if (driver != NULL) {
+
+			long color, new_color;
+			int color_cmp = item->data.slider.value;
+			color = driver->get_backlight_color(driver);
+
+			if (strcmp(item->id, "backlight_color_red") == 0) {
+				new_color = (color & 0x00FFFF) | (color_cmp << 16);
+
+				driver->set_backlight_color(driver, new_color);
+			}
+			else if (strcmp(item->id, "backlight_color_green") == 0) {
+				new_color = (color & 0xFF00FF) | (color_cmp << 8);
+
+				driver->set_backlight_color(driver, new_color);
+
+			}
+			else if (strcmp(item->id, "backlight_color_blue") == 0) {
+				new_color = (color & 0xFFFF00) | (color_cmp);
+
+				driver->set_backlight_color(driver, new_color);
 			}
 		}
 	}

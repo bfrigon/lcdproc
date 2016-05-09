@@ -42,6 +42,7 @@ typedef struct Client {
 	ClientState state;
 	int sock;
 	int backlight;
+	int keypad_backlight;
 	int heartbeat;
 
 	LinkedList *messages;		/**< Messages that the client sent. */

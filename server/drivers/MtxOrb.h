@@ -1,18 +1,22 @@
 #ifndef MTXORB_H
 #define MTXORB_H
 
-#define DEFAULT_CONTRAST	480
-#define DEFAULT_ADJ_BACKLIGHT	1
-#define DEFAULT_BRIGHTNESS	1000
-#define DEFAULT_OFFBRIGHTNESS	0
-#define DEFAULT_DEVICE		"/dev/lcd"
-#define DEFAULT_SPEED		19200
-#define DEFAULT_LINEWRAP	1
-#define DEFAULT_AUTOSCROLL	0
-#define DEFAULT_CURSORBLINK	0
-#define DEFAULT_SIZE		"20x4"
-#define DEFAULT_BACKLIGHT	1
-#define DEFAULT_TYPE		"lcd"
+#define DEFAULT_CONTRAST                480
+#define DEFAULT_ADJ_BACKLIGHT           1
+#define DEFAULT_BRIGHTNESS              1000
+#define DEFAULT_OFFBRIGHTNESS           0
+#define DEFAULT_KEYPAD_BRIGHTNESS       1000
+#define DEFAULT_KEYPAD_OFFBRIGHTNESS    0
+#define DEFAULT_DEVICE                  "/dev/lcd"
+#define DEFAULT_SPEED                   19200
+#define DEFAULT_LINEWRAP                1
+#define DEFAULT_AUTOSCROLL              0
+#define DEFAULT_CURSORBLINK             0
+#define DEFAULT_SIZE                    "20x4"
+#define DEFAULT_BACKLIGHT               1
+#define DEFAULT_KEYPAD_BACKLIGHT        1
+#define DEFAULT_TYPE                    "lcd"
+#define DEFAULT_BACKLIGHT_COLOR         "FFFFFF"
 
 typedef struct MtxOrbModule {
 	int model;
@@ -46,6 +50,14 @@ MODULE_EXPORT void MtxOrb_set_contrast (Driver *drvthis, int promille);
 MODULE_EXPORT int  MtxOrb_get_brightness(Driver *drvthis, int state);
 MODULE_EXPORT void MtxOrb_set_brightness(Driver *drvthis, int state, int promille);
 MODULE_EXPORT void MtxOrb_backlight (Driver *drvthis, int on);
+
+MODULE_EXPORT int  MtxOrb_get_keypad_brightness(Driver *drvthis, int state);
+MODULE_EXPORT void MtxOrb_set_keypad_brightness(Driver *drvthis, int state, int promille);
+MODULE_EXPORT void MtxOrb_keypad_backlight (Driver *drvthis, int on);
+
+MODULE_EXPORT void MtxOrb_set_backlight_color (Driver *drvthis, long color);
+MODULE_EXPORT long MtxOrb_get_backlight_color (Driver *drvthis);
+
 MODULE_EXPORT void MtxOrb_output (Driver *drvthis, int state);
 MODULE_EXPORT const char * MtxOrb_get_info (Driver *drvthis);
 

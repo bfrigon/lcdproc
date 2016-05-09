@@ -92,6 +92,7 @@ handle_input(void)
 
 	debug(RPT_DEBUG, "%s()", __FUNCTION__);
 
+
 	current_screen = screenlist_current();
 	if (current_screen)
 		current_client = current_screen->client;
@@ -100,6 +101,22 @@ handle_input(void)
 
 	/* Handle all keypresses */
 	while ((key = drivers_get_key()) != NULL) {
+
+		if ((idle_timer > autobacklight_timeout)
+			&& ((autobacklight_mode & (AUTOBACKLIGHT_MODE_LCD | AUTOBACKLIGHT_MODE_KPD)) != 0)
+			&& (autobacklight_mode & AUTOBACKLIGHT_MODE_OMIT_KEY)) {
+
+			/* reset idle timer */
+			idle_timer = 0;
+
+			/* Discard current key event */
+			continue;
+		}
+		else {
+
+			/* reset idle timer */
+			idle_timer = 0;
+		}
 
 		/* Find what client wants the key */
 		kr = input_find_key(key, current_client);

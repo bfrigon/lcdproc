@@ -72,23 +72,26 @@
 # define SYSCONFDIR "/etc"
 #endif
 
-#define DEFAULT_BIND_ADDR		"127.0.0.1"
-#define DEFAULT_BIND_PORT		LCDPORT
-#define DEFAULT_CONFIGFILE		SYSCONFDIR "/LCDd.conf"
-#define DEFAULT_USER			"nobody"
-#define DEFAULT_DRIVER			"curses"
-#define DEFAULT_DRIVER_PATH		""	/* not needed */
-#define MAX_DRIVERS			8
-#define DEFAULT_FOREGROUND_MODE		0
-#define DEFAULT_ROTATE_SERVER_SCREEN	SERVERSCREEN_ON
-#define DEFAULT_REPORTDEST		RPT_DEST_STDERR
-#define DEFAULT_REPORTLEVEL		RPT_WARNING
+#define DEFAULT_BIND_ADDR               "127.0.0.1"
+#define DEFAULT_BIND_PORT               LCDPORT
+#define DEFAULT_CONFIGFILE              SYSCONFDIR "/LCDd.conf"
+#define DEFAULT_USER                    "nobody"
+#define DEFAULT_DRIVER                  "curses"
+#define DEFAULT_DRIVER_PATH             ""  /* not needed */
+#define MAX_DRIVERS                     8
+#define DEFAULT_FOREGROUND_MODE         0
+#define DEFAULT_ROTATE_SERVER_SCREEN    SERVERSCREEN_ON
+#define DEFAULT_REPORTDEST              RPT_DEST_STDERR
+#define DEFAULT_REPORTLEVEL             RPT_WARNING
 
-#define DEFAULT_SCREEN_DURATION		32
-#define DEFAULT_BACKLIGHT		BACKLIGHT_OPEN
-#define DEFAULT_HEARTBEAT		HEARTBEAT_OPEN
-#define DEFAULT_TITLESPEED		TITLESPEED_MAX
-#define DEFAULT_AUTOROTATE		AUTOROTATE_ON
+#define DEFAULT_SCREEN_DURATION         32
+#define DEFAULT_BACKLIGHT               BACKLIGHT_OPEN
+#define DEFAULT_KEYPAD_BACKLIGHT        BACKLIGHT_OPEN
+#define DEFAULT_AUTOBACKLIGHT_MODE      AUTOBACKLIGHT_MODE_OFF
+#define DEFAULT_AUTOBACKLIGHT_TIMEOUT   0
+#define DEFAULT_HEARTBEAT               HEARTBEAT_OPEN
+#define DEFAULT_TITLESPEED              TITLESPEED_MAX
+#define DEFAULT_AUTOROTATE              AUTOROTATE_ON
 
 /* Socket to bind to...
 
@@ -139,6 +142,7 @@ static volatile short got_reload_signal = 0;
 
 /* Local exported variables */
 long timer = 0;
+long idle_timer = 0;
 
 /**** Local functions ****/
 static void clear_settings(void);
@@ -268,6 +272,9 @@ clear_settings(void)
 	foreground_mode = UNSET_INT;
 	rotate_server_screen = UNSET_INT;
 	backlight = UNSET_INT;
+	keypad_backlight = UNSET_INT;
+	autobacklight_timeout = UNSET_INT;
+	autobacklight_mode = UNSET_INT;
 	heartbeat = UNSET_INT;
 	titlespeed = UNSET_INT;
 
@@ -437,6 +444,18 @@ process_configfile(char *configfile)
 		backlight = config_get_tristate("Server", "Backlight", 0, "open", UNSET_INT);
 	}
 
+	if (keypad_backlight == UNSET_INT) {
+		keypad_backlight = config_get_tristate("Server", "Keypad_Backlight", 0, "open", UNSET_INT);
+	}
+
+	if (autobacklight_mode == UNSET_INT) {
+		autobacklight_mode = config_get_int("Server", "AutoBacklight_Mode", 0, DEFAULT_AUTOBACKLIGHT_MODE);
+	}
+
+	if (autobacklight_timeout == UNSET_INT) {
+		autobacklight_timeout = config_get_int("Server", "AutoBacklight_Timeout", 0, DEFAULT_AUTOBACKLIGHT_TIMEOUT);
+	}
+
 	if (heartbeat == UNSET_INT) {
 		heartbeat = config_get_tristate("Server", "Heartbeat", 0, "open", UNSET_INT);
 	}
@@ -514,6 +533,13 @@ set_default_settings(void)
 		default_duration = DEFAULT_SCREEN_DURATION;
 	if (backlight == UNSET_INT)
 		backlight = DEFAULT_BACKLIGHT;
+	if (keypad_backlight == UNSET_INT)
+		keypad_backlight = DEFAULT_KEYPAD_BACKLIGHT;
+	if (autobacklight_mode == UNSET_INT)
+		autobacklight_mode = DEFAULT_AUTOBACKLIGHT_MODE;
+	if (autobacklight_timeout == UNSET_INT)
+		autobacklight_timeout = DEFAULT_AUTOBACKLIGHT_TIMEOUT;
+
 	if (heartbeat == UNSET_INT)
 		heartbeat = DEFAULT_HEARTBEAT;
 	if (titlespeed == UNSET_INT)
@@ -797,6 +823,7 @@ do_mainloop(void)
 		if (render_lag > 0) {
 			/* Time for a rendering stroke */
 			timer ++;
+			idle_timer ++;
 			screenlist_process();
 			s = screenlist_current();
 

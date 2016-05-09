@@ -282,6 +282,54 @@ backlight_func(Client *c, int argc, char **argv)
 }
 
 /**
+ * Toggles the keypad backlight, if enabled.
+ *
+ *\verbatim
+ * Usage: keypad_backlight {on|off|toggle|blink|flash}
+ *\endverbatim
+ */
+int
+keypad_backlight_func(Client *c, int argc, char **argv)
+{
+	if (c->state != ACTIVE)
+		return 1;
+
+	if (argc != 2) {
+		sock_send_error(c->sock, "Usage: keypad_backlight {on|off|toggle|blink|flash}\n");
+		return 0;
+	}
+
+	debug(RPT_DEBUG, "keypad_backlight(%s)", argv[1]);
+
+
+	//keypad_backlight = (keypad_backlight && 1);  /* only preserves ON/OFF bit*/
+
+	if (strcmp ("on", argv[1]) == 0) {
+		c->keypad_backlight = BACKLIGHT_ON;
+	}
+	else if (strcmp ("off", argv[1]) == 0) {
+		c->keypad_backlight = BACKLIGHT_OFF;
+	}
+	else if (strcmp ("toggle", argv[1]) == 0) {
+		if (c->keypad_backlight == BACKLIGHT_ON)
+			c->keypad_backlight = BACKLIGHT_OFF;
+		else if (c->keypad_backlight == BACKLIGHT_OFF)
+			c->keypad_backlight = BACKLIGHT_ON;
+	}
+	else if (strcmp ("blink", argv[1]) == 0) {
+		c->keypad_backlight |= BACKLIGHT_BLINK;
+	}
+	else if (strcmp ("flash", argv[1]) == 0) {
+		c->keypad_backlight |= BACKLIGHT_FLASH;
+	}
+
+	sock_send_string(c->sock, "success\n");
+
+	return 0;
+
+}
+
+/**
  * Sends back information about the loaded drivers.
  *
  *\verbatim

@@ -124,8 +124,11 @@ typedef struct MtxOrb_private_data {
 	int contrast;		/**< current contrast */
 	int brightness;
 	int offbrightness;
+	int keypad_brightness;
+	int keypad_offbrightness;
 	int adjustable_backlight;
-
+	long backlight_color;
+	
 	MtxOrb_type_type MtxOrb_type;
 
 	/* the keymap */
@@ -162,6 +165,8 @@ static const MtxOrbModuleEntry modulelist[] = {
 	{ 0x21, "GLK128128-25", 0 },	/* ??? */
 	{ 0x22, "GLK12232-25-WBL", 0 },
 	{ 0x24, "GLK12232-25-SM", 0 },
+	{ 0x2B, "LK204-7T-1U", 0 },
+	{ 0x2C, "LK204-7T-USB", 0 },
 	{ 0x31, "LK404-AT", 0 },
 	{ 0x32, "VFD1621", 0 },	/* MOS-AV-162A ? */
 	{ 0x33, "LK402-12", 0 },
@@ -220,8 +225,10 @@ MtxOrb_init (Driver *drvthis)
 	char device[256] = DEFAULT_DEVICE;
 	int speed = DEFAULT_SPEED;
 	char size[256] = DEFAULT_SIZE;
+	char blcolor[256] = DEFAULT_BACKLIGHT_COLOR;
 	char buf[256] = "";
 	int tmp, w, h;
+	long l_tmp;
 
 	PrivateData *p;
 
@@ -302,6 +309,37 @@ MtxOrb_init (Driver *drvthis)
 		tmp = DEFAULT_OFFBRIGHTNESS;
 	}
 	p->offbrightness = tmp;
+
+	/* Which keypad backlight brightness */
+	tmp = drvthis->config_get_int(drvthis->name, "Keypad_Brightness", 0, DEFAULT_KEYPAD_BRIGHTNESS);
+	debug(RPT_INFO, "%s: Keypad_Brightness (in config) is '%d'", __FUNCTION__, tmp);
+	if ((tmp < 0) || (tmp > 1000)) {
+		report(RPT_WARNING, "%s: Keypad_Brightness must be between 0 and 1000; using default %d",
+			drvthis->name, DEFAULT_KEYPAD_BRIGHTNESS);
+		tmp = DEFAULT_KEYPAD_BRIGHTNESS;
+	}
+	p->keypad_brightness = tmp;
+
+	/* Which keypad backlight-off "brightness" */
+	tmp = drvthis->config_get_int(drvthis->name, "Keypad_OffBrightness", 0, DEFAULT_KEYPAD_OFFBRIGHTNESS);
+	debug(RPT_INFO, "%s: Keypad_OffBrightness (in config) is '%d'", __FUNCTION__, tmp);
+	if ((tmp < 0) || (tmp > 1000)) {
+		report(RPT_WARNING, "%s: Keypad_OffBrightness must be between 0 and 1000; using default %d",
+			drvthis->name, DEFAULT_KEYPAD_OFFBRIGHTNESS);
+		tmp = DEFAULT_KEYPAD_OFFBRIGHTNESS;
+	}
+	p->keypad_offbrightness = tmp;
+
+	/* Get backlight color */
+	strncpy(blcolor, drvthis->config_get_string(drvthis->name, "BacklightColor", 0, DEFAULT_BACKLIGHT_COLOR), sizeof(blcolor));
+	blcolor[sizeof(blcolor)-1] = '\0';
+	if ((sscanf(blcolor, "%lx", &l_tmp) != 1)
+		|| (l_tmp < 0) || (l_tmp > 0xFFFFFF)) {
+		report(RPT_WARNING, "%s: cannot read backlight color: %s; using default %s",
+				drvthis->name, blcolor, DEFAULT_BACKLIGHT_COLOR);
+		sscanf(DEFAULT_BACKLIGHT_COLOR , "%lx", &l_tmp);
+	}
+	p->backlight_color = l_tmp;
 
 	/* Get speed */
 	tmp = drvthis->config_get_int(drvthis->name, "Speed", 0, DEFAULT_SPEED);
@@ -446,6 +484,8 @@ MtxOrb_init (Driver *drvthis)
 	MtxOrb_cursorblink(drvthis, DEFAULT_CURSORBLINK);
 	MtxOrb_set_contrast(drvthis, p->contrast);
 	MtxOrb_backlight(drvthis, DEFAULT_BACKLIGHT);
+	MtxOrb_keypad_backlight(drvthis, DEFAULT_KEYPAD_BACKLIGHT);
+	MtxOrb_set_backlight_color(drvthis, p->backlight_color);
 	MtxOrb_get_info(drvthis);
 	report(RPT_INFO, "Display detected: %s", p->info);
 
@@ -744,6 +784,19 @@ MtxOrb_get_brightness(Driver *drvthis, int state)
 	return (state == BACKLIGHT_ON) ? p->brightness : p->offbrightness;
 }
 
+/**
+ * Retrieve keypad brightness.
+ * \param drvthis  Pointer to driver structure.
+ * \param state    Keypad brightness state (on/off) for which we want the value.
+ * \return         Stored keypad brightness in promille.
+ */
+MODULE_EXPORT int
+MtxOrb_get_keypad_brightness(Driver *drvthis, int state)
+{
+	PrivateData *p = drvthis->private_data;
+
+	return (state == BACKLIGHT_ON) ? p->keypad_brightness : p->keypad_offbrightness;
+}
 
 /**
  * Set on/off brightness.
@@ -770,6 +823,30 @@ MtxOrb_set_brightness(Driver *drvthis, int state, int promille)
 	MtxOrb_backlight(drvthis, state);
 }
 
+/**
+ * Set on/off keypad brightness.
+ * \param drvthis  Pointer to driver structure.
+ * \param state    Keypad brightness state (on/off) for which we want to store the value.
+ * \param promille New keypad brightness in promille.
+ */
+MODULE_EXPORT void
+MtxOrb_set_keypad_brightness(Driver *drvthis, int state, int promille)
+{
+	PrivateData *p = drvthis->private_data;
+
+	/* Check it */
+	if (promille < 0 || promille > 1000)
+		return;
+
+	/* store the software value since there is no get */
+	if (state == BACKLIGHT_ON) {
+		p->keypad_brightness = promille;
+	}
+	else {
+		p->keypad_offbrightness = promille;
+	}
+	MtxOrb_keypad_backlight(drvthis, state);
+}
 
 /**
  * Turn the LCD backlight on or off.
@@ -818,6 +895,69 @@ MtxOrb_backlight (Driver *drvthis, int on)
 	}
 }
 
+/**
+ * Turn the keypad backlight on or off.
+ * \param drvthis  Pointer to driver structure.
+ * \param on       New backlight status.
+ */
+MODULE_EXPORT void
+MtxOrb_keypad_backlight (Driver *drvthis, int on)
+{
+	PrivateData *p = drvthis->private_data;
+
+	int promille = (on == BACKLIGHT_ON)
+				 ? p->keypad_brightness
+				 : p->keypad_offbrightness;
+
+	unsigned char out[5] = { '\xFE', '\x9C', 0 };
+
+	/* map range [0, 1000] -> [0, 255] that the hardware understands */
+	out[2] = (unsigned char) ((long) promille * 255 / 1000);
+
+	write(p->fd, out, 3);
+
+	debug(RPT_DEBUG, "MtxOrb: changed keypad brightness to %d", promille);
+}
+
+/**
+ * Set LCD backlight color.
+ * \param drvthis   Pointer to driver structure.
+ * \param color     Backlight color. (0xRRGGBB)
+ */
+MODULE_EXPORT void
+MtxOrb_set_backlight_color (Driver *drvthis, long color)
+{
+	PrivateData *p = drvthis->private_data;
+
+	/* Check it */
+	if ((color < 0) || (color > 0xFFFFFF))
+		return;
+
+	p->backlight_color = color;
+
+	unsigned char out[5] = { '\xFE', '\x82', 0, 0, 0 };
+	out[2] = (color & 0xFF0000) >> 16;
+	out[3] = (color & 0x00FF00) >> 8;
+	out[4] = color & 0x0000FF;
+
+	write(p->fd, out, 5);
+
+	debug(RPT_DEBUG, "MtxOrb: set backlight color: RGB=%06X", color);
+}
+
+/**
+ * Get LCD backlight color.
+ * \param drvthis   Pointer to driver structure.
+ * \return          The backlight color. (0xRRGGBB)
+ */
+MODULE_EXPORT long
+MtxOrb_get_backlight_color (Driver *drvthis)
+{
+
+	PrivateData *p = drvthis->private_data;
+
+	return p->backlight_color;
+}
 
 /**
  * Set output port(s).
@@ -986,7 +1126,7 @@ MtxOrb_get_info (Driver *drvthis)
 
 	/* Wait the specified amount of time. */
 	tv.tv_sec = 0;		/* seconds */
-	tv.tv_usec = 500;	/* microseconds */
+	tv.tv_usec = 1000;	/* microseconds */
 
 	retval = select(p->fd+1, &rfds, NULL, NULL, &tv);
 
@@ -1026,7 +1166,7 @@ MtxOrb_get_info (Driver *drvthis)
 
 	/* Wait the specified amount of time. */
 	tv.tv_sec = 0;		/* seconds */
-	tv.tv_usec = 500;	/* microseconds */
+	tv.tv_usec = 1000;	/* microseconds */
 
 	retval = select(p->fd+1, &rfds, NULL, NULL, &tv);
 
@@ -1054,7 +1194,7 @@ MtxOrb_get_info (Driver *drvthis)
 
 	/* Wait the specified amount of time. */
 	tv.tv_sec = 0;		/* seconds */
-	tv.tv_usec = 500;	/* microseconds */
+	tv.tv_usec = 1000;	/* microseconds */
 
 	retval = select(p->fd+1, &rfds, NULL, NULL, &tv);
 

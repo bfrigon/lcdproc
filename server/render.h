@@ -23,6 +23,11 @@
 #define BACKLIGHT_BLINK		0x100
 #define BACKLIGHT_FLASH		0x200
 
+#define AUTOBACKLIGHT_MODE_OFF      0x00
+#define AUTOBACKLIGHT_MODE_LCD      0x01
+#define AUTOBACKLIGHT_MODE_KPD      0x02
+#define AUTOBACKLIGHT_MODE_OMIT_KEY 0x04
+
 #define CURSOR_OFF		0
 #define CURSOR_DEFAULT_ON	1
 #define CURSOR_BLOCK		4
@@ -34,8 +39,12 @@
 
 extern int heartbeat;
 extern int backlight;
+extern int keypad_backlight;
+extern int autobacklight_mode;
+extern int autobacklight_timeout;
 extern int titlespeed;
 extern int output_state;
+extern long idle_timer;
 
 /* Render the given screen. */
 int render_screen(Screen *s, long timer);

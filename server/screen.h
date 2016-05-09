@@ -47,6 +47,7 @@ typedef struct Screen {
 	Priority priority;
 	short int heartbeat;
 	short int backlight;
+	short int keypad_backlight;
 	short int cursor;
 	short int cursor_x;
 	short int cursor_y;

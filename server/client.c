@@ -44,6 +44,7 @@ Client *client_create(int sock)
 	c->sock = sock;
 	c->messages = NULL;
 	c->backlight = BACKLIGHT_OPEN;
+	c->keypad_backlight = BACKLIGHT_OPEN;
 	c->heartbeat = HEARTBEAT_OPEN;
 
 	/*Set up message list...*/

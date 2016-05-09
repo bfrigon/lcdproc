@@ -38,6 +38,7 @@ extern char *build_date;
 /* Variable from stone age, still used a lot.  */
 
 extern long timer;
+extern long idle_timer;
 /* 32 bits at 8Hz will overflow in 2 ^ 29 = 5e8 seconds = 17 years.
  * If you get an overflow, please mail us and we will fix this personally
  * for you ! */

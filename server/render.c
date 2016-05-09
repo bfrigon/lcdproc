@@ -53,7 +53,12 @@ int heartbeat = HEARTBEAT_OPEN;
 static int heartbeat_fallback = HEARTBEAT_ON; /* If no heartbeat setting has been set at all */
 
 int backlight = BACKLIGHT_OPEN;
+int keypad_backlight = BACKLIGHT_OPEN;
 static int backlight_fallback = BACKLIGHT_ON; /* If no backlight setting has been set at all */
+static int keypad_backlight_fallback = BACKLIGHT_ON; /* If no keypad backlight setting has been set at all */
+
+int autobacklight_mode = AUTOBACKLIGHT_MODE_OFF;
+int autobacklight_timeout = 0;
 
 int titlespeed = 1;
 
@@ -75,7 +80,8 @@ static int render_num(Widget *w, int left, int top, int right, int bottom);
  * Renders a screen. The following actions are taken in order:
  *
  * \li  Clear the screen.
- * \li  Set the backlight.
+ * \li  Set the backlight brightness.
+ * \li  Set the keypad backlight brightness.
  * \li  Set out-of-band data (output).
  * \li  Render the frame contents.
  * \li  Set the cursor.
@@ -100,7 +106,7 @@ render_screen(Screen *s, long timer)
 	/* 1. Clear the LCD screen... */
 	drivers_clear();
 
-	/* 2. Set up the backlight */
+	/* 2. Set up the display and keypad backlight */
 	/*-
 	 * 2.1:
 	 * First we find out who has set the backlight:
@@ -145,9 +151,75 @@ render_screen(Screen *s, long timer)
 				^ ((timer & 14) == 14)
 			) ? BACKLIGHT_ON : BACKLIGHT_OFF);
 	}
+	/* Auto backlight is ON for the LCD backlight and idle timer has reached
+	 *the timeout value. 
+	 */
+	else if ((autobacklight_mode & AUTOBACKLIGHT_MODE_LCD)
+		&& (idle_timer >= autobacklight_timeout)) {
+
+		drivers_backlight(BACKLIGHT_OFF);
+	}
 	else {
 		/* Simple: Only send lowest bit then... */
 		drivers_backlight(tmp_state & BACKLIGHT_ON);
+	}
+
+	/*-
+	 * 2.3:
+	 * First we find out who has set the keypad backlight:
+	 *   a) the screen,
+	 *   b) the client, or
+	 *   c) the server core
+	 * with the latter taking precedence over the earlier. If the
+	 * keypad backlight is not set on/off then use the fallback
+	 * (set it ON).
+	 */
+	if (keypad_backlight != BACKLIGHT_OPEN) {
+		tmp_state = keypad_backlight;
+	}
+	else if ((s->client != NULL) && (s->client->keypad_backlight != BACKLIGHT_OPEN)) {
+		tmp_state = s->client->keypad_backlight;
+	}
+	else if (s->keypad_backlight != BACKLIGHT_OPEN) {
+		tmp_state = s->keypad_backlight;
+	}
+	else {
+		tmp_state = keypad_backlight_fallback;
+	}
+
+	/*-
+	 * 2.4:
+	 * If one of the keypad backlight options (FLASH or BLINK) has been set turn
+	 * it on/off based on a timed algorithm.
+	 */
+	/* NOTE: dirty stripping of other options... */
+	/* Backlight flash: check timer and flip the keypad backlight as appropriate */
+	if (tmp_state & BACKLIGHT_FLASH) {
+		drivers_keypad_backlight(
+			(
+				(tmp_state & BACKLIGHT_ON)
+				^ ((timer & 7) == 7)
+			) ? BACKLIGHT_ON : BACKLIGHT_OFF);
+	}
+	/* Backlight blink: check timer and flip the keypad backlight as appropriate */
+	else if (tmp_state & BACKLIGHT_BLINK) {
+		drivers_keypad_backlight(
+			(
+				(tmp_state & BACKLIGHT_ON)
+				^ ((timer & 14) == 14)
+			) ? BACKLIGHT_ON : BACKLIGHT_OFF);
+	}
+	/* Auto backlight is ON for the keypad backlight and idle timer has reached
+	 * the timeout value. 
+	 */
+	else if ((autobacklight_mode & AUTOBACKLIGHT_MODE_KPD)
+		&& (idle_timer >= autobacklight_timeout)) {
+
+		drivers_keypad_backlight(BACKLIGHT_OFF);
+	}
+	else {
+		/* Simple: Only send lowest bit then... */
+		drivers_keypad_backlight(tmp_state & BACKLIGHT_ON);
 	}
 
 	/* 3. Output ports from LCD - outputs depend on the current screen */
